@@ -18,7 +18,8 @@ export type ProviderType =
   | 'custom'
   | 'antigravity'
   | 'kiro'
-  | 'codex';
+  | 'codex'
+  | 'claude';
 
 /**
  * Client 类型定义
@@ -401,6 +402,7 @@ export function getProviderDisplayName(type: string): string {
     aws: 'AWS Bedrock',
     cohere: 'Cohere',
     mistral: 'Mistral',
+    claude: 'Claude',
     custom: 'Custom',
   };
   return names[type.toLowerCase()] || type;
