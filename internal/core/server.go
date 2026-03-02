@@ -76,6 +76,7 @@ func (s *ManagedServer) setupRoutes() *http.ServeMux {
 	mux.Handle("/api/antigravity/", http.StripPrefix("/api", components.AntigravityHandler))
 	mux.Handle("/api/kiro/", http.StripPrefix("/api", components.KiroHandler))
 	mux.Handle("/api/codex/", http.StripPrefix("/api", components.CodexHandler))
+	mux.Handle("/api/claude/", http.StripPrefix("/api", components.ClaudeHandler))
 
 	mux.Handle("/v1/messages", components.ProxyHandler)
 	mux.Handle("/v1/messages/", components.ProxyHandler)
@@ -200,6 +201,15 @@ func (s *ManagedServer) Stop(ctx context.Context) error {
 		defer oauthCancel()
 		if err := s.config.Components.CodexOAuthServer.Stop(oauthCtx); err != nil {
 			log.Printf("[Server] Failed to stop Codex OAuth server: %v", err)
+		}
+	}
+
+	// 停止 Claude OAuth 回调服务器
+	if s.config.Components != nil && s.config.Components.ClaudeOAuthServer != nil {
+		claudeOAuthCtx, claudeOAuthCancel := context.WithTimeout(ctx, 2*time.Second)
+		defer claudeOAuthCancel()
+		if err := s.config.Components.ClaudeOAuthServer.Stop(claudeOAuthCtx); err != nil {
+			log.Printf("[Server] Failed to stop Claude OAuth server: %v", err)
 		}
 	}
 
