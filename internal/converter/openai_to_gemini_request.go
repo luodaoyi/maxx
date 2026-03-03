@@ -2,12 +2,14 @@ package converter
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/awsl-project/maxx/internal/domain"
 )
 
 const geminiFunctionThoughtSignature = "skip_thought_signature_validator"
+const geminiSystemOnlyPlaceholderText = " "
 
 func init() {
 	RegisterConverter(domain.ClientTypeOpenAI, domain.ClientTypeGemini, &openaiToGeminiRequest{}, &openaiToGeminiResponse{})
@@ -88,6 +90,7 @@ func (c *openaiToGeminiRequest) Transform(body []byte, model string, stream bool
 
 	toolCallNameByID := map[string]string{}
 	toolResponses := map[string]string{}
+	hasToolText := false
 	for _, msg := range req.Messages {
 		if msg.Role == "assistant" {
 			for _, tc := range msg.ToolCalls {
@@ -101,13 +104,16 @@ func (c *openaiToGeminiRequest) Transform(body []byte, model string, stream bool
 		if msg.Role != "tool" || msg.ToolCallID == "" {
 			continue
 		}
-		toolResponses[msg.ToolCallID] = stringifyContent(msg.Content)
+		contentStr := stringifyContent(msg.Content)
+		if strings.TrimSpace(contentStr) != "" {
+			hasToolText = true
+		}
+		toolResponses[msg.ToolCallID] = contentStr
 	}
 
-	totalMessages := len(req.Messages)
 	var systemParts []GeminiPart
 	for _, msg := range req.Messages {
-		if (msg.Role == "system" || msg.Role == "developer") && totalMessages > 1 {
+		if msg.Role == "system" || msg.Role == "developer" {
 			switch content := msg.Content.(type) {
 			case string:
 				if content != "" {
@@ -140,8 +146,6 @@ func (c *openaiToGeminiRequest) Transform(body []byte, model string, stream bool
 			geminiContent.Role = "user"
 		case "assistant":
 			geminiContent.Role = "model"
-		case "system", "developer":
-			geminiContent.Role = "user"
 		}
 
 		switch content := msg.Content.(type) {
@@ -224,6 +228,16 @@ func (c *openaiToGeminiRequest) Transform(body []byte, model string, stream bool
 					Parts: toolParts,
 				})
 			}
+		}
+	}
+	if len(geminiReq.Contents) == 0 {
+		if len(systemParts) > 0 || hasToolText {
+			geminiReq.Contents = append(geminiReq.Contents, GeminiContent{
+				Role:  "user",
+				Parts: []GeminiPart{{Text: geminiSystemOnlyPlaceholderText}},
+			})
+		} else {
+			return nil, fmt.Errorf("no user/system content available")
 		}
 	}
 	if len(systemParts) > 0 {
